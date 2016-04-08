@@ -1,0 +1,193 @@
+Include('NTOog.ntj');
+//Slightly complicated example adding support for muling.
+//These are in the global scope so they can be accessed within your functions.
+oog = new NTOogManager();
+gm = oog.gm;
+
+
+//Set reasonable defaults if they havent configured this script, but warn.
+if ('NTMule' in NTOogConfig) {
+	gm.LogMessage('Muling configured, thanks!');
+}
+else {
+	// order reversed due to scroll direction on manager log.
+	gm.LogMessage('main botting account.');
+	gm.LogMessage('on to a new account created with the same password as your');
+	gm.LogMessage('char_configs directory. Default muling behaviour is to mule');
+	gm.LogMessage('Please edit your NTOogConfigCustom.ntl file in your');
+	NTOogConfig.NTMule = {};
+}
+if (!NTOogConfig.NTMule.accountPrefix)
+	NTOogConfig.NTMule.accountPrefix = me.account.substring(0,10);
+if (!NTOogConfig.NTMule.gameName)
+	NTOogConfig.NTMule.gameName = '';
+if (!NTOogConfig.NTMule.gamePassword)
+	NTOogConfig.NTMule.gamePassword = '';
+if (!NTOogConfig.NTMule.password)
+	NTOogConfig.NTMule.password = '';
+if (!NTOogConfig.NTMule.characterLocation)
+	NTOogConfig.NTMule.characterLocation = 0;
+
+//some local helper functions and variables
+var _config = NTOogConfig.NTMule; 
+//convenient, shorthand for our configuration settings: _config.parameterName
+var _muleAccount = _config.firstMule;
+var _muling = false;
+var _mulePassword;
+var _muleCharacterLocation = _config.characterLocation;
+var _joinTries = 0;
+var _primaryConfig = null;
+
+
+//Here we will override any oog functions we want to change the behaviour of.
+//Notice that where the code in NTOog.ntj uses the object 'this', we make use
+//of the globally defined object above, namely 'oog'.
+oog.OldLobbyChat = oog.LobbyChat; // store the old one
+oog.LobbyChat = function() {
+	if (_muling) return oog.Lobby(); // dont chat, pretend you're in the lobby
+	else return oog.OldLobbyChat(); // if not muling, act normally.
+};
+oog.GameAlreadyExists = function() { // Another character is probably muling
+	if (!(_location = controlData.getLocation())) return false;
+	if (_muling && _config.gameName && _config.gamePassword) {
+		oog.joinLastGame = true;
+		oog.lastGameName = _config.gameName;
+		oog.lastGamePassword = _config.gamePassword;
+	}
+	return false;
+};
+oog.GameDoesNotExist = function() { // but our stuff is there! be persistant
+	if (!(_location = controlData.getLocation())) return false;
+	if (oog.joinLastGame) {
+		_joinTries++;
+		if (_joinTries > 2) {
+			_joinTries = 0;
+			oog.gm.LogMessage('I was planning on rejoining ' + oog.lastGameName +
+			' but it doesn\'t exist.');
+			_rpc.DoneMuling(); // I hope this line is never executed.
+		}
+	}
+	this.lastGameStatus = 0;
+	return false;
+};
+oog.CreateGame = function() {
+	if (!(_location = controlData.getLocation())) return false;
+	var _thisLocation = controlData.controls.lobby.create;
+	if (_muling) {
+		var _muleGameName = _config.gameName || getRandomString(10);
+		var _muleGamePassword = _config.gamePassword || getRandomString(5);
+		controlData.setText(_thisLocation.editBox.characterDifference, 99);
+		controlData.setText(_thisLocation.editBox.maxNumberOfPlayers, 8);
+		controlData.click(_thisLocation.button.normal);
+		controlData.setText(_thisLocation.editBox.gameName, _muleGameName);
+		controlData.setText(_thisLocation.editBox.password, _muleGamePassword);
+		controlData.click(_thisLocation.button.createGame);
+		oog.gm.LogMessage('Muling game created: ' +
+				_muleGameName + '/' + _muleGamePassword);
+	}
+	else {
+		controlData.setText(_thisLocation.editBox.characterDifference,
+				NTOogConfig.characterDifference);
+		controlData.setText(_thisLocation.editBox.maxNumberOfPlayers,
+				NTOogConfig.maxPlayers);
+		controlData.click(controlData.gameDifficulties[me.diff]);
+		oog.gm.CreateGame();
+	}
+	Delay(1000);
+	oog.lastGameStatus = 1;
+	oog.lastGameTime = GetTickCount();
+	return true;
+};
+oog.LoginError = function() {
+	if (!(_location = controlData.getLocation())) return false;
+	var _thisLocation = controlData.controls.login.loginError;
+	if (oog.account == _muleAccount && !this.accountExists) {
+		oog.account = _muleAccount = (_config.accountPrefix + 
+				getRandomString(15 - _config.accountPrefix.length));
+	}
+	this.accountExists = false;
+	controlData.click(_thisLocation.button.ok);
+	return true;
+};
+
+//Main function is pretty straightforward
+function NTMain() {
+	Delay(5000);
+	// Add a script message handler for RPCs 
+	RegisterEvent(EVENT_SCRIPTMSG, _ScriptMessageHandler);
+	while (1) {
+		if (!_primaryConfig && me.ingame) { 
+			// store the primary config to read mule settings from.
+			var _classes = ['Amazon', 'Sorceress', 'Necromancer', 'Paladin',
+			                'Barbarian', 'Druid', 'Assassin'];
+			_primaryConfig = ('NTConfig_' + _classes[me.classid] + '_' +
+					me.charname + '.ntl');
+		}
+		_location = controlData.getLocation();
+		if (_location) gm.SetStatus(_location.name);
+		Delay(1000);
+		oog.HandleMyLocation();
+	}
+}
+
+//There are many ways to handle script messages, this is just an example of a
+//complex but pretty flexible system. For an easier example, check out
+//NTBotGame.ntj
+var _rpc = {};
+_rpc.StartMuling = function(optionalAccount, optionalPassword,
+		optionalCharacterLocation) {
+	_muleAccount = (optionalAccount || _muleAccount ||
+			(_config.accountPrefix + getRandomString(15 - _config.accountPrefix.length)));
+	_mulePassword = (optionalPassword || _mulePassword || _config.password);
+	_muleCharacterLocation = (optionalCharacterLocation || _muleCharacterLocation ||
+			_config.characterLocation);
+	oog.inGameScript = 'NTMule/NTPermAndDrop.ntj';
+	_muling = true;
+	_joinTries = 0;
+};
+_rpc.NextMule = function() {
+	_joinTries = 0;
+	if (oog.account != _muleAccount) {
+		oog.joinLastGame = true;
+		oog.account = _muleAccount;
+		oog.password = _mulePassword;
+		oog.characterLocation = _muleCharacterLocation;
+		oog.inGameScript = 'NTMule/NTPickup.ntj';
+	}
+	else {
+		_muleCharacterLocation++;
+		if (_muleCharacterLocation == 8) {
+			oog.account = _muleAccount = (_config.accountPrefix + 
+					getRandomString(15 - _config.accountPrefix.length));
+			_muleCharacterLocation = 0;
+			oog.accountExists = false;
+		}
+		oog.joinLastGame = true;
+		oog.characterLocation = _muleCharacterLocation;
+	}
+};
+_rpc.DoneMuling = function() {
+	oog.account = oog.primaryAccount;
+	oog.password = '';
+	oog.characterLocation = oog.primaryCharacterLocation;
+	oog.inGameScript = 'NTBot/NTBotGame.ntj';
+	_muling = false;
+	oog.accountExists = true;
+	oog.joinLastGame = false;
+};
+_rpc.GetPrimaryConfig = function(respondTo) {
+	if (_primaryConfig) {
+		var _script = GetScript(respondTo);
+		_script.Send('GetPrimaryConfig|' + _primaryConfig);
+	}
+};
+
+//This dispatches to the above methods based on the message
+var _ScriptMessageHandler = function(msg) {
+	// msg should be in the format 'FunctionName|argument1|argument2|argument3'
+	var _args = msg.split('|');
+	var _functionName = _args.shift();
+	if (_functionName in _rpc) {
+		_rpc[_functionName].apply(_rpc, _args);
+	}
+};

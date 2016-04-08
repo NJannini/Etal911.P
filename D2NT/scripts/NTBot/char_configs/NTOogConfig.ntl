@@ -1,0 +1,49 @@
+// Default Oog Settings File
+NTOogConfig = {
+    // Chat settings
+    joinChatAfterGame: false,
+    joinRandomChannel: false,
+    joinChannelInChat: '',
+    chatMessageOnJoin: '',
+    chatMessageAfterGame: [''],
+    sayGameName: false,
+    nextGameMessage: 'Next game should be:',
+    sayPassword: true,
+    sayTime: true,
+    timeMessage: 'in about',
+    // Timing settings:
+    gameMinLength: 1000 * 60 * 3, //3 minutes
+    unableToConnectRetry: 1000 * 60 * 5, //5 minutes
+    realmDownRetry: 1000 * 60 * 60 * 12, //12 hours
+    disconnectedRetry: 1000 * 60 * 5, //5 minutes
+    cdkeyInUseRetry: 1000 * 60 * 5, //5 minutes
+    failedToJoinRetry: 1000 * 60 * 4, //4 minutes
+    connectingToBnetTimeout: 1000 * 20, //20 seconds
+    characterScreenTimeout: 1000 * 10,  //10 seconds
+    pleaseWaitTimeout: 1000 * 10, //10 seconds
+    createGameWait: 1000 * 5, //5 seconds
+    createGameTimeout: 1000 * 45, //45 seconds
+    waitInLineTimeout: 1000 * 60, //1 minute
+    characterSelectDelay: 1000 * 3, //3 seconds
+    tempBannedTimeout: 1000 * 60 * 15, //15 minutes
+    loginDelay: 1000, //1 second
+    clickDelay: 500, //0.5 seconds
+    textDelay: 500, //0.5 seconds
+    clickDelayRandom: 500, //0.5 seconds
+    textDelayRandom: 500, //0.5 seconds
+    gameDoesNotExistTimeout: 1000 * 30, //30 minutes
+    waitBeforeEnterChat: 1000, //1 second
+    waitInChatBeforeActions: 1000 * 2, //2 seconds
+    // Game Settings
+    characterDifference: 99, // character difference when creating games
+    maxPlayers: 8, // max players for created games
+    // Account/Character creation settings
+    registerWithEmail: '', // email address used to register new accounts(optional)
+    createCharacterLadder: true, // create ladder characters if true
+    createCharacterHardcore: false, // create hardcore characters if true
+    createCharacterClassic: false, // create classic character is true
+    createCharacterClass: 3, // class to select on character create screen 0-7
+    // 0:Amazon, 1:Sorceress, 2:Necromancer, 3:Paladin, 4:Barbarian, 5:Druid, 6:Assassin 
+    createCharacterNamePrefix: '', // randomly generated character names with the given prefix
+};
+Include('NTBot/char_configs/NTOogConfigCustom.ntl');

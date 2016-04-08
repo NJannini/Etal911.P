@@ -1,0 +1,84 @@
+// ##### Runes #########################
+//[Name] == ElRune
+//[Name] == EldRune
+//[Name] == TirRune
+//[Name] == NefRune
+//[Name] == EthRune
+//[Name] == IthRune
+//[Name] == TalRune
+//[Name] == RalRune
+//[Name] == OrtRune
+//[Name] == ThulRune
+//[Name] == AmnRune
+//[Name] == SolRune
+//[Name] == ShaelRune
+//[Name] == DolRune
+//[Name] == HelRune
+//[Name] == IoRune
+//[Name] == LumRune
+//[Name] == KoRune
+//[Name] == FalRune
+[Name] == LemRune
+//[Name] == PulRune
+//[Name] == UmRune
+//[Name] == MalRune
+[Name] >= IstRune && [Name] <= ZodRune
+
+// ##### Gems ##########################
+//[Name] == ChippedAmethyst
+//[Name] == ChippedDiamond
+//[Name] == ChippedEmerald
+//[Name] == ChippedRuby
+//[Name] == ChippedSapphire
+//[Name] == ChippedSkull
+//[Name] == ChippedTopaz
+//[Name] == FlawedAmethyst
+//[Name] == FlawedDiamond
+//[Name] == FlawedEmerald
+//[Name] == FlawedRuby
+//[Name] == FlawedSapphire
+//[Name] == FlawedSkull
+//[Name] == FlawedTopaz
+//[Name] == Amethyst
+//[Name] == Diamond
+//[Name] == Emerald
+//[Name] == Ruby
+//[Name] == Skull
+//[Name] == Sapphire
+//[Name] == Topaz
+//[Name] == FlawlessAmethyst
+//[Name] == FlawlessDiamond
+//[Name] == FlawlessEmerald
+//[Name] == FlawlessRuby
+//[Name] == FlawlessSapphire
+//[Name] == FlawlessSkull
+//[Name] == FlawlessTopaz
+//[Name] == PerfectAmethyst
+//[Name] == PerfectDiamond
+//[Name] == PerfectEmerald
+//[Name] == PerfectRuby
+//[Name] == PerfectSapphire
+//[Name] == PerfectSkull
+//[Name] == PerfectTopaz
+
+// ##### Potions #######################
+[Name] == GreaterHealingPotion
+[Name] == SuperHealingPotion
+[Name] == GreaterManaPotion
+[Name] == SuperManaPotion
+//[Name] == RejuvenationPotion
+[Name] == FullRejuvenationPotion
+
+// ##### Keys ##########################
+//[Name] == KeyOfTerror
+//[Name] == KeyOfHate
+//[Name] == KeyOfDestruction
+
+// ##### Organs ########################
+//[Name] == mephisto'sbrain
+//[Name] == baal'seye
+//[Name] == diablo'shorn
+
+
+// ##### Gold ##########################
+[Type] == gold # [Gold] >= 1000

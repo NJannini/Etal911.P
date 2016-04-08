@@ -1,0 +1,620 @@
+Include('libs/controlInfo.ntl');
+Include('NTBot/char_configs/NTOogConfig.ntl');
+controlData = new controlInfo();
+
+const D2NT_MGR_LOADING = 1;
+const D2NT_MGR_READY = 2;
+const D2NT_MGR_LOGIN = 3;
+const D2NT_MGR_CREATE_GAME = 4;
+const D2NT_MGR_INGAME = 5;
+const D2NT_MGR_RESTART = 6;
+const D2NT_MGR_CHICKEN = 7;
+const D2NT_MGR_PRINT_STATUS = 8;
+const D2NT_MGR_PRINT_LOG = 9;
+function NTGameManager() {
+	this.SendMessage = function(location_id, message, pending_time) {
+		return SendCopyData('D2NT Manager', null, location_id << 16 | pending_time, message);
+	};
+	this.SetStatus = function(message) {
+		return this.SendMessage(D2NT_MGR_PRINT_STATUS, message, 0);
+	};
+	this.LogMessage = function(message) {
+		return this.SendMessage(D2NT_MGR_PRINT_LOG, message, 0);
+	};
+	this.Login = function() {
+		return this.SendMessage(D2NT_MGR_LOGIN, 'Login', 0);
+	};
+	this.Ready = function() {
+		return this.SendMessage(D2NT_MGR_READY, '', 0);
+	};
+	this.CreateGame = function() {
+		return this.SendMessage(D2NT_MGR_CREATE_GAME, "Create Game", 0);
+	};
+	this.Restart = function(message, restart_delay) {
+		switch (arguments.length) {
+		case 0:
+			message = '';
+			break;
+		case 1:
+			restart_delay = 10;
+			break;
+		default:
+			break;
+		}
+		return this.SendMessage(D2NT_MGR_RESTART, message, restart_delay);
+	};
+	this.InGame = function(message) {
+		return this.SendMessage(D2NT_MGR_INGAME, message, 0);
+	};
+}
+
+function NTOogManager() {
+	this.gm = new NTGameManager();
+	this.inGame = false;
+	this.inGameAt = GetTickCount() - NTOogConfig.gameMinLength;
+	this.inGameScript = 'NTBot/NTBotGame.ntj';
+	this.chatLoggedIn = false;
+	this.account = me.account;
+	this.password = null;
+	this.accountExists = true;
+	this.characterLocation = me.charloc;
+	this.chatActionsDone = false;
+	this.lastGameName = null;
+	this.lastGamePassword = null;
+	this.lastGameTime = 0;
+	this.joinLastGame = false;
+	this.lastGameStatus = 2;//1=Making Game 2=Success
+	this.primaryAccount = me.account;
+	this.primaryCharacterLocation = me.charloc;
+	this.currentAccount = null;
+	this.currentCharacterLocation = null;
+	controlData.clickDelay = NTOogConfig.clickDelay;
+	controlData.textDelay = NTOogConfig.textDelay;
+	controlData.clickDelayRandom = NTOogConfig.clickDelayRandom;
+	controlData.textDelayRandom = NTOogConfig.textDelayRandom;
+	this.WaitForLocation = function(location, max_wait_time) {
+		var _startTime = GetTickCount();
+		while (GetTickCount() - _startTime < max_wait_time) {
+			var _location = controlData.getLocation();
+			Delay(300);
+			if (_location && _location.name == location) { return true; }
+		}
+		Deadlock();
+		return false;
+	};
+	this.Login = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.login;
+		this.currentAccount = null;
+		this.currentCharacterLocation = null;
+		if (!this.accountExists) {
+			controlData.click(_thisLocation.button.createNewAccount);
+			return this.WaitForLocation('Create New Account', 5000);
+		}
+		else {
+			Delay(NTOogConfig.loginDelay);
+			controlData.setText(_thisLocation.editBox.accountName, this.account);
+			Delay(Random(300, 750));
+			if (!this.password) {
+				this.gm.Login();
+			}
+			else {
+				controlData.setText(_thisLocation.editBox.password, this.password);
+				Delay(Random(300, 750));
+				controlData.click(_thisLocation.button.logIn);
+			}
+			return this.WaitForLocation('Character Select', 5000);
+		}
+	};
+	this.TermsOfUse = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.termsOfUse;
+		controlData.click(_thisLocation.button.agree);
+		return true;
+	};
+	this.CreateNewAccount = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.newAccount;
+		Delay(NTOogConfig.loginDelay);
+		controlData.setText(_thisLocation.editBox.accountName, this.account);
+		Delay(800);
+		if (this.password) {
+			controlData.setText(_thisLocation.editBox.password, this.password);
+			Delay(800);
+			controlData.setText(_thisLocation.editBox.confirmPassword, this.password);
+			Delay(800);
+			controlData.click(_thisLocation.button.ok);
+		}
+		else {
+			controlData.click(_thisLocation.editBox.password);
+			this.gm.Login();
+			Delay(2000);
+			controlData.click(controlData.controls.characterSelect.pleaseWait.button.cancel);
+			Delay(800);
+			controlData.click(_thisLocation.editBox.confirmPassword);
+			this.gm.Login();
+			Delay(2000);
+			controlData.click(_thisLocation.button.ok);
+		}
+		return true;
+	};
+	this.RegisterEmail = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.email;
+		if (NTOogConfig.registerWithEmail) {
+			controlData.setText(_thisLocation.editBox.email, NTOogConfig.registerWithEmail);
+			Delay(500);
+			controlData.setText(_thisLocation.editBox.confirmEmail, NTOogConfig.registerWithEmail);
+			Delay(500);
+			controlData.click(_thisLocation.button.register);
+			if (this.WaitForLocation('Character Select', 5000)) {
+				this.accountExists = true;
+				this.gm.LogMessage('Mule account ' + this.account + ' created.');
+				var logfile = FileOpen('logs/created_accounts_' + this.primaryAccount + '.log', 2); // opens file 
+				if (!logfile) { logfile = FileOpen('logs/created_accounts_' + this.primaryAccount + '.log', 1); } // creates file 
+				if (!logfile) { logfile = FileOpen('created_accounts_' + this.primaryAccount + '.log', 2); } // opens file 
+				if (!logfile) { logfile = FileOpen('created_accounts_' + this.primaryAccount + '.log', 1); } // creates file 
+				if (!logfile) {
+					this.gm.LogMessage('CANNOT ENTER ACCOUNT CREATED TO LOG');
+					this.gm.LogMessage('Account: ' + this.account);
+					this.gm.LogMessage('CANNOT ENTER ACCOUNT CREATED TO LOG');
+				}
+				else {
+					logfile.WriteLine(this.account);
+					logfile.Close();
+				}
+			}
+		}
+		else {
+			controlData.click(_thisLocation.button.dontRegister);
+		}
+		return true;
+	};
+	this.ConfirmNoEmail = function() {
+		controlData.click(controlData.controls.email.confirm.button.continue);
+		this.accountExists = true;
+		this.gm.LogMessage('Mule account ' + this.account + ' created.');
+		var logfile = FileOpen('logs/created_accounts_' + this.primaryAccount + '.log', 2); // opens file 
+		if (!logfile) { logfile = FileOpen('logs/created_accounts_' + this.primaryAccount + '.log', 1); } // creates file 
+		if (!logfile) {
+			this.gm.LogMessage('CANNOT ENTER ACCOUNT CREATED TO LOG');
+			this.gm.LogMessage('Account: ' + this.account);
+			this.gm.LogMessage('CANNOT ENTER ACCOUNT CREATED TO LOG');
+		}
+		else {
+			logfile.WriteLine(this.account);
+			logfile.Close();
+		}
+		return true;
+	};
+	this.CharacterSelect = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.characterSelect;
+		//if(GetLocaleString(11162)) {
+		//	endtime = GetTickCount() + NTOogConfig.tempBannedTimeout;
+		//	while(endtime > GetTickCount()) {
+		//		this.gm.SetStatus('Temp Banned! Waiting: ' + " (" + parseInt((endtime-GetTickCount())/1000,10) + "s)", 0);
+		//		SetStatusText('Temp Banned! Waiting: ' + " (" + parseInt((endtime-GetTickCount())/1000,10) + "s)", 0);
+		//		Delay(1000);
+		//		controlData.click(_thisLocation.button.exit);
+		//		return false;
+		//	}
+		//}
+		if (!this.currentAccount) { this.currentAccount = this.account; }
+		this.currentCharacterLocation = null;
+		if (this.account != this.currentAccount) {
+			this.gm.LogMessage('NTOogManager: Account needs to be changed.' + 'Leaving character select');
+			Delay(1000);
+			controlData.click(_thisLocation.button.exit);
+			return true;
+		}
+		var _startedWaiting = GetTickCount();
+		var _control;
+		while (GetTickCount() - _startedWaiting < NTOogConfig.characterScreenTimeout) {
+			_control = controlData.get(_thisLocation.textBox.characterInfo[this.characterLocation]);
+			if (_control && _control.GetText() != undefined) { break; }
+			Delay(NTOogConfig.characterScreenTimeout / 10);
+		}
+		if (_control && _control.GetText() != undefined) {
+			Delay(NTOogConfig.characterSelectDelay);
+			controlData.click(_thisLocation.textBox.characters[this.characterLocation]);
+			controlData.click(_thisLocation.button.ok);
+			return true;
+		}
+		else {
+			if (controlData.getLocation().name == 'Character Select') {
+				for (var _i = 0; _i < 8; _i++) {
+					_control = controlData.get(_thisLocation.textBox.characterInfo[_i]);
+					if (!_control || _control.GetText() === undefined) { 
+						this.characterLocation =_i;
+						break;
+					}
+				}
+				controlData.click(_thisLocation.button.createNew);
+				this.gm.LogMessage('No character in position ' + this.characterLocation	+ ', creating one.');
+				return this.WaitForLocation('Character Create', 5000);
+			}
+			else {
+				controlData.click(_thisLocation.button.exit);
+				this.gm.LogMessage('NTOogManager: Character screen timed out');
+				return true;
+			}
+		}
+	};
+	function Deadlock(){
+		for (var i = 0; i < 41; i++)
+		{
+			if (controlData.getLocation() != undefined) { break; }
+			if (i == 40) {
+				this.gm.LogMessage(String.fromCharCode(255) + 'c1Deadlocked. Restarting');
+				this.gm.Restart('DeadLocked', 5);
+				Delay(5000)
+			} 
+			Delay(500);
+		}
+	}
+	this.CharacterCreate = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.characterCreate;
+		Delay(NTOogConfig.characterSelectDelay);
+		controlData.clickClass(NTOogConfig.createCharacterClass);
+		var _name = NTOogConfig.createCharacterNamePrefix;
+		_name += getRandomString(15 - _name.length);
+		Delay(500);
+		controlData.setText(_thisLocation.editBox.charName, _name);
+		Delay(500);
+		if(NTOogConfig.createCharacterHardcore) {
+			controlData.click(_thisLocation.button.hardcore);
+			Delay(500);
+		}
+		if(!NTOogConfig.createCharacterLadder) {
+			controlData.click(_thisLocation.button.ladderChar);
+			Delay(500);
+		}
+		if (NTOogConfig.createCharacterClassic) {
+			controlData.click(_thisLocation.button.expansionChar);
+			Delay(500);
+		}
+		controlData.click(_thisLocation.button.ok);
+		Delay(1500);
+		_location = controlData.getLocation();
+		if (_location.name == 'Name Exists') {
+			return true;
+		}
+		if(NTOogConfig.createCharacterHardcore) { controlData.click(_thisLocation.button.continueHardcore); }
+		return this.WaitForLocation('Lobby', 5000);
+	};
+	this.NameExists = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.characterCreate.nameExists;
+		controlData.click(_thisLocation.button.cancel);
+		return this.WaitForLocation('Character Create');
+	};
+	this.LobbyChat = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.lobby.chat;
+		if (this.chatActionsDone || !NTOogConfig.joinChatAfterGame || (!NTOogConfig.joinRandomChannel && !NTOogConfig.joinChannelInChat)) { 
+			return this.Lobby();
+		}
+		var _channelName = (NTOogConfig.joinRandomChannel ? getRandomString(Random(3, 10)) : NTOogConfig.joinChannelInChat);
+		Delay(NTOogConfig.waitInChatBeforeActions * Random(100, 120) / 100);
+		Say('/join ' + _channelName);
+		Delay(1000);
+		if (!this.chatLoggedIn && NTOogConfig.chatMessageOnJoin) {
+			this.chatLoggedIn = true;
+			Say(NTOogConfig.chatMessageOnJoin);
+			Delay(Random(450, 750));
+		}
+		for (i=0; i<NTOogConfig.chatMessageAfterGame.length; ++i) {
+			Say(NTOogConfig.chatMessageAfterGame[i]);
+			Delay(Random(450, 750));
+		}
+		if (NTOogConfig.sayGameName && me.gamename && me.gamename.indexOf('-') != -1) {
+			var _gameName = me.gamename.split('-');
+			var number = (parseFloat(_gameName.pop(),10)+1);
+			var newnumber;
+			if (number < 10) { newnumber = "0"+number; } else { newnumber = number }
+			_gameName.push(newnumber);
+			var _gameNameMessage = [NTOogConfig.nextGameMessage];
+			_gameNameMessage.push(_gameName.join('-'));
+			if (NTOogConfig.sayGamePassword) { _gameNameMessage.push('//', me.gamepassword); }
+			if (NTOogConfig.sayTime) {
+				var _gameTime = NTOogConfig.gameMinLength - (GetTickCount() - this.inGameAt);
+				if (_gameTime > 0) { _gameNameMessage.push(NTOogConfig.timeMessage, parseInt(_gameTime / 1000,10), 'seconds'); }
+			}
+			Say(_gameNameMessage.join(' '));
+			Delay(Random(450, 750));
+		}
+		this.chatActionsDone = true;
+		return false;
+	};
+	this.Lobby = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		for(var i = 0; i < 10; i++){ 
+			if(controlData.getLocation() == controlData.controls.lobby.join) {
+				SetStatusText('User Interaction');
+				this.gm.SetStatus('User Join Game');
+				Delay(3000);
+			}
+			Delay(200);
+		}
+		var _thisLocation = controlData.controls.lobby;
+		if (this.currentCharacterLocation === null) { this.currentCharacterLocation = this.characterLocation; }
+		if (this.account != this.currentAccount || this.characterLocation != this.currentCharacterLocation) {
+			this.gm.LogMessage('NTOogManager: Account or Character needs to be changed.' + 'Leaving lobby');
+			Delay(1000);
+			controlData.click(_thisLocation.button.quit);
+			return this.WaitForLocation('Character Select', 5000);
+		}
+		var _control;
+		if (this.joinLastGame && this.lastGameName) {
+			_control = controlData.get(_thisLocation.button.join);
+			if(_control && _control.pressed)
+			{
+				controlData.click(_thisLocation.button.create);
+				Delay(1500);
+			}
+			controlData.click(_thisLocation.button.join);
+			return this.WaitForLocation('Join Game', 5000);
+		}
+		if (NTOogConfig.joinChatAfterGame && _location.name != 'Lobby Chat') {
+			Delay(NTOogConfig.waitBeforeEnterChat * Random(100, 120) / 100);
+			controlData.click(_thisLocation.button.enterChat);
+			return this.WaitForLocation('Lobby Chat', 5000);
+		}
+		if (GetTickCount() - this.inGameAt > NTOogConfig.gameMinLength) {
+			Delay(NTOogConfig.createGameWait);
+			_control = controlData.get(_thisLocation.button.create);
+			if(_control && _control.pressed)
+			{
+				controlData.click(_thisLocation.button.join);
+				Delay(1500);
+			}
+			controlData.click(_thisLocation.button.create);
+			return this.WaitForLocation('Create Game', 5000);
+		}
+		else {
+			var _timeLeft = (NTOogConfig.gameMinLength - (GetTickCount() - this.inGameAt)) / 1000;
+			SetStatusText('New Game in: ' + parseInt(_timeLeft,10) + ' seconds');
+		}
+		return false;
+	};
+	this.CreateGame = function() {
+		var _thisLocation = '';
+		if(this.lastGameStatus == '2'){
+			if (!(_location = controlData.getLocation())) { return false; }
+			_thisLocation = controlData.controls.lobby.create;
+			controlData.setText(_thisLocation.editBox.characterDifference, NTOogConfig.characterDifference);
+			controlData.setText(_thisLocation.editBox.maxNumberOfPlayers, NTOogConfig.maxPlayers);
+			this.gm.CreateGame();
+			Delay(1000);
+			this.lastGameStatus = 1;
+			this.lastGameTime = GetTickCount();
+			return true;
+		}
+		else
+		{
+			if (!(_location = controlData.getLocation())) { return false; }
+			var retry_delay = (parseInt(NTOogConfig.failedToJoinRetry/1000,10));
+			this.gm.LogMessage(String.fromCharCode(255) + 'c1Failed to Create Game! Waiting to Retry');
+			_thisLocation = controlData.controls.lobby.create;
+			controlData.click(_thisLocation.button.cancel);
+			NTOogConfig.failedToJoinRetry += Random( -60, 60 ) * 1000;
+			endtime = GetTickCount() + NTOogConfig.failedToJoinRetry;
+			while(endtime > GetTickCount()) {
+				this.gm.SetStatus('Failed to Join! Waiting: ' + " (" + parseInt((endtime-GetTickCount())/1000,10) + "s)", 0);
+				SetStatusText('Failed to Join! Waiting: ' + " (" + parseInt((endtime-GetTickCount())/1000,10) + "s)", 0);
+				Delay(1000);
+			}
+			this.lastGameStatus = 2;
+			return false;
+		}
+	};
+	this.WaitingInLine = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.lobby.inLine;
+		if (GetTickCount() - this.lastGameTime > NTOogConfig.waitInLineTimeout) {
+			controlData.click(_thisLocation.button.cancel);
+			return true;
+		}
+		return false; // still on waiting page
+	};
+	this.JoinGame = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.lobby.join;
+		if (this.lastGameName && this.joinLastGame) {
+			if (this.lastGameStatus == 1) { Delay(1000 * 15); }
+			controlData.setText(_thisLocation.editBox.gameName, this.lastGameName);
+			Delay(Random(100,300));
+			controlData.setText(_thisLocation.editBox.password, this.lastGamePassword);
+			controlData.click(_thisLocation.button.joinGame);
+			this.lastGameStatus = 1;
+			this.lastGameTime = GetTickCount();
+			return true;
+		}
+		controlData.click(_thisLocation.button.cancel);
+		return true;
+	};
+	this.Ladder = function() {
+		// Just act as though you are in the lobby
+		return this.Lobby();
+	};
+	this.ChannelList = function() {
+		// Just act as though you are in the lobby
+		return this.Lobby();
+	};
+	this.MainMenu = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.mainMenu;
+		if (controlData.getCurrentRealmIndex() != me.gatewayid) {
+			controlData.click(_thisLocation.button.gateway);
+			return true;
+		}
+		controlData.click(controlData.gameTypes[me.playtype]);
+		return true;
+	};
+	this.SelectDifficulty = function() {
+		controlData.click(controlData.singlePlayerDifficulties[me.diff]);
+		return true;
+	};
+	this.LoginError = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.login.loginError;
+		this.accountExists = false;
+		controlData.click(_thisLocation.button.ok);
+		return true;
+	};
+	this.UnableToConnect = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.login.unableToConnect;
+		controlData.click(_thisLocation.button.ok);
+		this.gm.LogMessage(String.fromCharCode(255) + 'c1Unable to Connect, Waiting to Retry.');
+		timeoutDelay(NTOogConfig.unableToConnectRetry, 'Unable to Connect! Waiting: ', true);
+		return true;
+	};
+	this.RealmDown = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.characterSelect;
+		this.joinLastGame = false;
+		this.gm.LogMessage(String.fromCharCode(255) + 'c1Realm Down. Waiting to Retry.');
+		timeoutDelay(NTOogConfig.realmDownRetry, 'Realm Down! Waiting: ');
+		return true;
+	};
+	this.PleaseWait = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.characterSelect.pleaseWait;
+		if (!this.WaitForLocation('Character Select', NTOogConfig.pleaseWaitTimeout)) {
+			controlData.click(_thisLocation.button.cancel);
+		}
+		Deadlock();
+		return true;
+	};
+	this.LostConnection = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.lobby.lostConnection;
+		controlData.click(_thisLocation.button.ok);
+		return true;
+	};
+	this.D2Splash = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.d2Splash;
+		controlData.click(_thisLocation.textBox.copyright);
+		return true;
+	};
+	this.CdkeyInUse = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.login.cdkeyInUse;
+		controlData.click(_thisLocation.button.ok);
+		this.gm.LogMessage(String.fromCharCode(255) + 'c1CD Key in Use! Waiting to Retry.');
+		timeoutDelay(NTOogConfig.cdkeyInUseRetry, 'CD key in use, Waiting: ');
+		return true;
+	};
+	this.SelectDifficulty = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		controlData.click(controlData.singlePlayerDifficulties[me.diff]);
+		return true;
+	};
+	this.ConnectingtoBattlenet = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.mainMenu.connecting;
+		if (!this.WaitForLocation('Login', NTOogConfig.connectingToBnetTimeout)) {
+			controlData.click(_thisLocation.button.cancel);
+		}
+		return true;
+	};
+	this.InvalidCdkey = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		this.gm.Restart('Invalid CD key.', 3600);
+		return false;
+	};
+	this.Connecting = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _thisLocation = controlData.controls.characterSelect;
+		if (!this.WaitForLocation('Character Select',
+				NTOogConfig.characterScreenTimeout)) {
+			controlData.click(_thisLocation.button.exit);
+		}
+		return true;
+	};
+	this.GameAlreadyExists = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		this.lastGameStatus = 0;
+		return false;
+	};
+	this.GameDoesNotExist = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		if (this.joinLastGame) {
+			this.joinLastGame = false;
+			this.gm.LogMessage('I was planning on rejoining ' + this.lastGameName +
+			' but it doesn\'t exist.');
+		}
+		this.lastGameStatus = 0;
+		return false;
+	};
+	this.SelectGateway = function() {
+		if (!(_location = controlData.getLocation())) { return false; }
+		controlData.clickRealmEntry(me.gatewayid);
+		controlData.click(controlData.controls.gateway.button.ok);
+		return true;
+	};
+	this.HandleMyLocation = function() {
+		if (me.ingame || this.inGame) { return this.InGame(); }
+		if (!(_location = controlData.getLocation())) { return false; }
+		var _funcName = _location.name.split(' ').join('').split('.').join('');
+		if (_funcName in this) { return this[_funcName](); }
+		this.gm.LogMessage('In location:' + _location.name + ' with no handler.');
+		return false;
+	};
+	this.InGame = function() {
+		if (me.ingame) { // in a game
+			if (!this.inGame) { // if the game just started
+				this.chatActionsDone = false;
+				this.inGameAt = GetTickCount();
+				if (Load(this.inGameScript)) {
+					RunGC(); // Run GC before each run
+					this.inGame = true;
+					if (me.playtype > 0) { this.gm.InGame('In Game [IP .' + me.gameserverip.split(".")[3] + ']'); }
+					else { this.gm.InGame('In Game'); }
+					this.lastGameStatus = 2;
+					this.lastGameName = me.gamename;
+					this.lastGamePassword = me.gamepassword;
+					return true;
+				}
+				return false;
+			}
+		}
+		else {// not in a game
+			if(this.inGame) { // if you were last time we checked
+				for (var i = 0; i < 40; i++) {
+					if (controlData.getLocation().id != undefined) { break; }
+					if (i > 38) {
+						this.gm.Restart('yc1White Screen of Death: Restarting', 15);
+						Delay(20000);
+					}
+					Delay(500);
+				}
+			}
+			this.inGame = false;
+			this.gm.Ready();
+			return true;
+		}
+		return false;
+	};
+}
+
+function timeoutDelay( time, message, noRandom ) {
+	if(!noRandom) { time += Random( -60, 60 ) * 1000; }
+	endtime = GetTickCount() + time;
+	while(endtime > GetTickCount()) {
+		this.gm.SetStatus(message + " (" + parseInt((endtime-GetTickCount())/1000,10) + "s)", 0);
+		Delay(1000);
+	}
+}
+
+function getRandomString(len_arg){
+	var new_str = "";
+	for (var i = 0; i < len_arg; i++) {
+		new_str+= String.fromCharCode(97+(Math.random()*26)|0);
+	}
+	return new_str;
+}

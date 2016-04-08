@@ -1,0 +1,14 @@
+// Place custom oog settings here
+// For example:
+//NTOogConfig.gameMinLength = 1000 * 60 * 12; // Set minimum game length to 12 minutes
+//NTOogConfig.createCharacterNamePrefix = 'pre-'; // Creates character names starting with 'pre-'
+//NTOogConfig.createCharacterClass = 1 // Create sorcs by default
+
+// Mule adds
+//NTOogConfig.NTMule = {}; // This line must be uncommented to configure muling
+//NTOogConfig.NTMule.firstMule = '';
+//NTOogConfig.NTMule.accountPrefix = me.account.substring(0,10);
+//NTOogConfig.NTMule.gameName = '';
+//NTOogConfig.NTMule.gamePassword = '';
+//NTOogConfig.NTMule.password = '';
+//NTOogConfig.NTMule.characterLocation = 0;
